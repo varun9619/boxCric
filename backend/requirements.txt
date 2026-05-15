@@ -1,7 +1,10 @@
-fastapi==0.104.1
-uvicorn==0.24.0.post1
-sqlalchemy==2.0.23
-psycopg2-binary==2.9.9
-pydantic==2.5.2
-pydantic-settings==2.1.0
-websockets==12.0
+fastapi
+uvicorn
+sqlalchemy
+pydantic
+pydantic-settings
+websockets
+torch
+torchvision
+Pillow
+python-multipart
