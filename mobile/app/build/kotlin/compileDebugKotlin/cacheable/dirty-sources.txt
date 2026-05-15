@@ -1,0 +1,6 @@
+D:\boxai\mobile\app\src\main\java\com\boxai\scorer\ui\ScorerViewModel.kt
+D:\boxai\mobile\app\src\main\java\com\boxai\scorer\ui\ScoreboardScreen.kt
+D:\boxai\mobile\app\src\main\java\com\boxai\scorer\ui\ConnectScreen.kt
+D:\boxai\mobile\app\src\main\java\com\boxai\scorer\data\Models.kt
+D:\boxai\mobile\app\src\main\java\com\boxai\scorer\MainActivity.kt
+D:\boxai\mobile\app\src\main\java\com\boxai\scorer\network\WebSocketManager.kt
