@@ -34,7 +34,7 @@ class WebSocketManager {
 
     // ── Connect with auto-reconnect ──────────────────────────────────────────
 
-    fun connect(scope: CoroutineScope, ip: String, matchId: Int = 1) {
+    fun connect(scope: CoroutineScope, ip: String, matchId: Int = 1, cameraRole: String = "CAM1") {
         currentIp = ip
         currentMatchId = matchId
         reconnectJob?.cancel()
@@ -44,7 +44,7 @@ class WebSocketManager {
                     client.webSocket(
                         host = currentIp,
                         port = port,
-                        path = "/ws/match/$currentMatchId"
+                        path = "/ws/match/$currentMatchId?camera=$cameraRole"
                     ) {
                         session = this
                         _connectionStatus.value = true

@@ -27,19 +27,42 @@ import com.boxai.scorer.data.Team
 fun MatchSetupScreen(
     serverIp: String,
     onIpChange: (String) -> Unit,
-    onStartMatch: (MatchSetup) -> Unit
+    onStartMatch: (MatchSetup) -> Unit,
+    onJoinMatch: (matchId: Int, role: CameraRole, serverIp: String) -> Unit,
+    onRegisterFace: (teamIndex: Int, playerIndex: Int, playerName: String) -> Unit,
+    registeredFaces: Map<Pair<Int, Int>, Boolean>,
+    initialSetup: com.boxai.scorer.data.MatchSetup = com.boxai.scorer.data.MatchSetup()
 ) {
-    // ── Local form state ──────────────────────────────────────────────────────
-    var teamAName by remember { mutableStateOf("Team A") }
-    var teamBName by remember { mutableStateOf("Team B") }
-    var totalOversStr by remember { mutableStateOf("6") }
-    var selectedCamera by remember { mutableStateOf(CameraRole.PHONE_1) }
+    // ── Tab state ─────────────────────────────────────────────────────────
+    var activeTab by remember { mutableStateOf(0) } // 0 = Start, 1 = Join
 
-    // Player name rows (up to 6 per team)
-    val teamAPlayers = remember { mutableStateListOf("", "", "", "", "", "") }
-    val teamBPlayers = remember { mutableStateListOf("", "", "", "", "", "") }
-
+    // ── Start-match form state (pre-filled from last match if available) ──────
+    var teamAName by remember { mutableStateOf(initialSetup.teamA.name.ifBlank { "Team A" }) }
+    var teamBName by remember { mutableStateOf(initialSetup.teamB.name.ifBlank { "Team B" }) }
+    var totalOversStr by remember { mutableStateOf(if (initialSetup.totalOvers > 0) initialSetup.totalOvers.toString() else "6") }
+    var selectedCamera by remember { mutableStateOf(CameraRole.DEVICE_1) }
+    var tossWinnerTeamId by remember { mutableStateOf(1) }
+    var tossDecision by remember { mutableStateOf("BAT") }
     var showErrors by remember { mutableStateOf(false) }
+
+    // Dynamic player lists — pre-filled from last match if available
+    val teamAPlayers = remember {
+        val saved = initialSetup.teamA.players.map { it.name }
+        mutableStateListOf<String>().also { list ->
+            list.addAll(if (saved.isEmpty()) listOf("", "") else saved)
+        }
+    }
+    val teamBPlayers = remember {
+        val saved = initialSetup.teamB.players.map { it.name }
+        mutableStateListOf<String>().also { list ->
+            list.addAll(if (saved.isEmpty()) listOf("", "") else saved)
+        }
+    }
+
+    // ── Join-match form state ──────────────────────────────────────────────
+    var joinMatchIdStr by remember { mutableStateOf("") }
+    var joinCamera by remember { mutableStateOf(CameraRole.DEVICE_2) }
+    var showJoinError by remember { mutableStateOf(false) }
 
     val isValid = teamAName.isNotBlank() &&
             teamBName.isNotBlank() &&
@@ -57,7 +80,6 @@ fun MatchSetupScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Header
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 "🏏 Match Setup",
@@ -65,116 +87,272 @@ fun MatchSetupScreen(
                 fontSize = 26.sp,
                 fontWeight = FontWeight.Black
             )
-            Text("Configure teams and camera before starting", color = TextSecondary, fontSize = 13.sp)
 
-            // ── Server IP ─────────────────────────────────────────────────────
+            // ── Tab Switcher ───────────────────────────────────────────────
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(CardBg),
+                horizontalArrangement = Arrangement.spacedBy(0.dp)
+            ) {
+                listOf("🆕  New Match", "🔗  Join Match").forEachIndexed { idx, label ->
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (activeTab == idx) AccentGreen else Color.Transparent)
+                            .clickable { activeTab = idx }
+                            .padding(vertical = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            label,
+                            color = if (activeTab == idx) Color.Black else TextSecondary,
+                            fontWeight = if (activeTab == idx) FontWeight.Bold else FontWeight.Normal,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+            }
+
+            // ── Server IP (shared) ─────────────────────────────────────────
             SetupCard(title = "Backend Server") {
                 SetupTextField(
                     label = "Server IP",
                     value = serverIp,
                     onValueChange = onIpChange,
-                    placeholder = "192.168.1.100",
+                    placeholder = "192.168.0.125",
                     keyboardType = KeyboardType.Decimal
                 )
             }
 
-            // ── Match Config ──────────────────────────────────────────────────
-            SetupCard(title = "Match Config") {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (activeTab == 0) {
+                // ══════════════════════════════════════════════════════════
+                // NEW MATCH TAB
+                // ══════════════════════════════════════════════════════════
+
+                // ── Match Config ───────────────────────────────────────────
+                SetupCard(title = "Match Config") {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        SetupTextField(
+                            label = "Team A Name",
+                            value = teamAName,
+                            onValueChange = { teamAName = it },
+                            placeholder = "Team A",
+                            isError = showErrors && teamAName.isBlank(),
+                            modifier = Modifier.weight(1f)
+                        )
+                        SetupTextField(
+                            label = "Team B Name",
+                            value = teamBName,
+                            onValueChange = { teamBName = it },
+                            placeholder = "Team B",
+                            isError = showErrors && teamBName.isBlank(),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                     SetupTextField(
-                        label = "Team A Name",
-                        value = teamAName,
-                        onValueChange = { teamAName = it },
-                        placeholder = "Team A",
-                        isError = showErrors && teamAName.isBlank(),
-                        modifier = Modifier.weight(1f)
-                    )
-                    SetupTextField(
-                        label = "Team B Name",
-                        value = teamBName,
-                        onValueChange = { teamBName = it },
-                        placeholder = "Team B",
-                        isError = showErrors && teamBName.isBlank(),
-                        modifier = Modifier.weight(1f)
+                        label = "Total Overs",
+                        value = totalOversStr,
+                        onValueChange = { totalOversStr = it.filter(Char::isDigit).take(2) },
+                        placeholder = "6",
+                        keyboardType = KeyboardType.Number,
+                        isError = showErrors && (totalOversStr.toIntOrNull() ?: 0) !in 1..20
                     )
                 }
-                SetupTextField(
-                    label = "Total Overs",
-                    value = totalOversStr,
-                    onValueChange = { totalOversStr = it.filter(Char::isDigit).take(2) },
-                    placeholder = "6",
-                    keyboardType = KeyboardType.Number,
-                    isError = showErrors && (totalOversStr.toIntOrNull() ?: 0) !in 1..20
-                )
-            }
 
-            // ── Team A Players ────────────────────────────────────────────────
-            SetupCard(title = "Team A Players") {
-                teamAPlayers.forEachIndexed { i, name ->
-                    SetupTextField(
-                        label = "Player ${i + 1}",
-                        value = name,
-                        onValueChange = { teamAPlayers[i] = it },
-                        placeholder = "Player ${i + 1} name (optional)"
-                    )
-                }
-            }
-
-            // ── Team B Players ────────────────────────────────────────────────
-            SetupCard(title = "Team B Players") {
-                teamBPlayers.forEachIndexed { i, name ->
-                    SetupTextField(
-                        label = "Player ${i + 1}",
-                        value = name,
-                        onValueChange = { teamBPlayers[i] = it },
-                        placeholder = "Player ${i + 1} name (optional)"
-                    )
-                }
-            }
-
-            // ── Camera Role ───────────────────────────────────────────────────
-            SetupCard(title = "This Phone's Camera Role") {
-                CameraRole.entries.forEach { role ->
-                    CameraRoleOption(
-                        role = role,
-                        selected = selectedCamera == role,
-                        onSelect = { selectedCamera = role }
-                    )
-                }
-            }
-
-            // ── Start Button ──────────────────────────────────────────────────
-            Button(
-                onClick = {
-                    if (!isValid) { showErrors = true; return@Button }
-                    val toPlayers: (List<String>, Int) -> List<Player> = { names, teamId ->
-                        names.filter(String::isNotBlank).mapIndexed { i, n ->
-                            Player(id = teamId * 100 + i, name = n)
+                // ── Team A Players ─────────────────────────────────────────
+                SetupCard(title = "Team A Players  (${teamAPlayers.count { it.isNotBlank() }})") {
+                    teamAPlayers.forEachIndexed { i, name ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            SetupTextField(
+                                label = "Player ${i + 1}",
+                                value = name,
+                                onValueChange = { teamAPlayers[i] = it },
+                                placeholder = "Player ${i + 1} name",
+                                modifier = Modifier.weight(1f)
+                            )
+                            if (name.isNotBlank()) {
+                                IconButton(onClick = { onRegisterFace(1, i, name) }) {
+                                    Text(if (registeredFaces[1 to i] == true) "✅" else "📷")
+                                }
+                            }
+                            // Remove button (only if more than 1 player)
+                            if (teamAPlayers.size > 1) {
+                                IconButton(onClick = { teamAPlayers.removeAt(i) }) {
+                                    Text("✕", color = AccentRed, fontSize = 12.sp)
+                                }
+                            }
                         }
                     }
-                    onStartMatch(
-                        MatchSetup(
-                            teamA = Team(1, teamAName, toPlayers(teamAPlayers, 1)),
-                            teamB = Team(2, teamBName, toPlayers(teamBPlayers, 2)),
-                            totalOvers = totalOversStr.toIntOrNull() ?: 6,
-                            cameraRole = selectedCamera,
-                            serverIp = serverIp,
-                            matchId = 1
+                    // Add player button
+                    TextButton(
+                        onClick = { teamAPlayers.add("") },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("+ Add Player", color = AccentGreen, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+
+                // ── Team B Players ─────────────────────────────────────────
+                SetupCard(title = "Team B Players  (${teamBPlayers.count { it.isNotBlank() }})") {
+                    teamBPlayers.forEachIndexed { i, name ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            SetupTextField(
+                                label = "Player ${i + 1}",
+                                value = name,
+                                onValueChange = { teamBPlayers[i] = it },
+                                placeholder = "Player ${i + 1} name",
+                                modifier = Modifier.weight(1f)
+                            )
+                            if (name.isNotBlank()) {
+                                IconButton(onClick = { onRegisterFace(2, i, name) }) {
+                                    Text(if (registeredFaces[2 to i] == true) "✅" else "📷")
+                                }
+                            }
+                            if (teamBPlayers.size > 1) {
+                                IconButton(onClick = { teamBPlayers.removeAt(i) }) {
+                                    Text("✕", color = AccentRed, fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
+                    TextButton(
+                        onClick = { teamBPlayers.add("") },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("+ Add Player", color = AccentGreen, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+
+
+                // ── Toss ───────────────────────────────────────────────────
+                SetupCard(title = "Toss Result") {
+                    Text("Who won the toss?", color = TextPrimary, fontSize = 13.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(
+                                selected = tossWinnerTeamId == 1,
+                                onClick = { tossWinnerTeamId = 1 },
+                                colors = RadioButtonDefaults.colors(selectedColor = AccentGreen, unselectedColor = TextSecondary)
+                            )
+                            Text(if (teamAName.isNotBlank()) teamAName else "Team A", color = TextPrimary, fontSize = 14.sp,
+                                modifier = Modifier.clickable { tossWinnerTeamId = 1 })
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(
+                                selected = tossWinnerTeamId == 2,
+                                onClick = { tossWinnerTeamId = 2 },
+                                colors = RadioButtonDefaults.colors(selectedColor = AccentGreen, unselectedColor = TextSecondary)
+                            )
+                            Text(if (teamBName.isNotBlank()) teamBName else "Team B", color = TextPrimary, fontSize = 14.sp,
+                                modifier = Modifier.clickable { tossWinnerTeamId = 2 })
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("Decision", color = TextPrimary, fontSize = 13.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(
+                                selected = tossDecision == "BAT",
+                                onClick = { tossDecision = "BAT" },
+                                colors = RadioButtonDefaults.colors(selectedColor = AccentGreen, unselectedColor = TextSecondary)
+                            )
+                            Text("Bat", color = TextPrimary, fontSize = 14.sp, modifier = Modifier.clickable { tossDecision = "BAT" })
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(
+                                selected = tossDecision == "BOWL",
+                                onClick = { tossDecision = "BOWL" },
+                                colors = RadioButtonDefaults.colors(selectedColor = AccentGreen, unselectedColor = TextSecondary)
+                            )
+                            Text("Bowl", color = TextPrimary, fontSize = 14.sp, modifier = Modifier.clickable { tossDecision = "BOWL" })
+                        }
+                    }
+                }
+
+                // ── Start Button ───────────────────────────────────────────
+                Button(
+                    onClick = {
+                        if (!isValid) { showErrors = true; return@Button }
+                        val toPlayers: (List<String>, Int) -> List<Player> = { names, teamId ->
+                            names.filter(String::isNotBlank).mapIndexed { i, n ->
+                                Player(id = teamId * 100 + i, name = n)
+                            }
+                        }
+                        onStartMatch(
+                            MatchSetup(
+                                teamA = Team(1, teamAName, toPlayers(teamAPlayers, 1)),
+                                teamB = Team(2, teamBName, toPlayers(teamBPlayers, 2)),
+                                totalOvers = totalOversStr.toIntOrNull() ?: 6,
+                                cameraRole = CameraRole.DEVICE_1,
+                                serverIp = serverIp,
+                                matchId = 1,
+                                tossWinnerTeamId = tossWinnerTeamId,
+                                tossDecision = tossDecision
+                            )
                         )
+                    },
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentGreen)
+                ) {
+                    Text("▶  Start Match", color = Color.Black, fontWeight = FontWeight.Black, fontSize = 18.sp)
+                }
+
+            } else {
+                // ══════════════════════════════════════════════════════════
+                // JOIN MATCH TAB
+                // ══════════════════════════════════════════════════════════
+
+                SetupCard(title = "Join Existing Match") {
+                    Text(
+                        "Enter the Match ID shown on the primary device after it starts the match.",
+                        color = TextSecondary,
+                        fontSize = 12.sp
                     )
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = AccentGreen)
-            ) {
-                Text(
-                    "▶  Start Match",
-                    color = Color.Black,
-                    fontWeight = FontWeight.Black,
-                    fontSize = 18.sp
-                )
+                    SetupTextField(
+                        label = "Match ID",
+                        value = joinMatchIdStr,
+                        onValueChange = { joinMatchIdStr = it.filter(Char::isDigit).take(6) },
+                        placeholder = "e.g. 3",
+                        keyboardType = KeyboardType.Number,
+                        isError = showJoinError && (joinMatchIdStr.toIntOrNull() ?: 0) <= 0
+                    )
+                    if (showJoinError && (joinMatchIdStr.toIntOrNull() ?: 0) <= 0) {
+                        Text("Please enter a valid Match ID", color = AccentRed, fontSize = 11.sp)
+                    }
+                }
+
+                SetupCard(title = "This Device's Role") {
+                    CameraRole.entries.forEach { role ->
+                        CameraRoleOption(
+                            role = role,
+                            selected = joinCamera == role,
+                            onSelect = { joinCamera = role }
+                        )
+                    }
+                }
+
+                Button(
+                    onClick = {
+                        val id = joinMatchIdStr.toIntOrNull() ?: 0
+                        if (id <= 0) { showJoinError = true; return@Button }
+                        onJoinMatch(id, joinCamera, serverIp)
+                    },
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentBlue)
+                ) {
+                    Text("🔗  Join Match", color = Color.White, fontWeight = FontWeight.Black, fontSize = 18.sp)
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -254,8 +432,11 @@ fun CameraRoleOption(role: CameraRole, selected: Boolean, onSelect: () -> Unit) 
                 fontSize = 14.sp
             )
             Text(
-                if (role == CameraRole.PHONE_1) "Primary — striker/bowler angle"
-                else "Secondary — side angle for run confirmation",
+                when (role) {
+                    CameraRole.DEVICE_1 -> "Primary — striker/bowler angle"
+                    CameraRole.DEVICE_2 -> "Secondary — side angle for run confirmation"
+                    CameraRole.SPECTATOR -> "No camera tracking — score & AI approval only"
+                },
                 color = TextSecondary,
                 fontSize = 11.sp
             )

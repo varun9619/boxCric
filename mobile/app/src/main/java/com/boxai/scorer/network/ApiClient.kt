@@ -5,6 +5,10 @@ import io.ktor.client.engine.cio.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import io.ktor.client.request.forms.submitFormWithBinaryData
+import io.ktor.client.request.forms.formData
+import android.graphics.Bitmap
+import java.io.ByteArrayOutputStream
 
 /**
  * Thin REST client for the FastAPI backend.
@@ -34,6 +38,62 @@ class ApiClient(private val ip: String, private val port: Int = 8000) {
     suspend fun getMatch(matchId: Int): String {
         return try {
             http.get("$base/matches/$matchId").bodyAsText()
+        } catch (e: Exception) {
+            """{"error":"${e.message}"}"""
+        }
+    }
+
+    // ── Players ───────────────────────────────────────────────────────────────
+
+    suspend fun createPlayer(name: String, teamId: Int): String {
+        return try {
+            val response: HttpResponse = http.post("$base/players") {
+                contentType(ContentType.Application.Json)
+                setBody("""{"name":"$name","team_id":$teamId}""")
+            }
+            response.bodyAsText()
+        } catch (e: Exception) {
+            """{"error":"${e.message}"}"""
+        }
+    }
+
+    suspend fun uploadFace(playerId: Int, bitmap: Bitmap): String {
+        return try {
+            val stream = ByteArrayOutputStream()
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 80, stream)
+            val byteArray = stream.toByteArray()
+            
+            val response: HttpResponse = http.submitFormWithBinaryData(
+                url = "$base/players/$playerId/register_face",
+                formData = formData {
+                    append("file", byteArray, Headers.build {
+                        append(HttpHeaders.ContentType, "image/jpeg")
+                        append(HttpHeaders.ContentDisposition, "filename=\"face.jpg\"")
+                    })
+                }
+            )
+            response.bodyAsText()
+        } catch (e: Exception) {
+            """{"error":"${e.message}"}"""
+        }
+    }
+
+    suspend fun recognizeBatter(matchId: Int, bitmap: Bitmap): String {
+        return try {
+            val stream = ByteArrayOutputStream()
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 80, stream)
+            val byteArray = stream.toByteArray()
+            
+            val response: HttpResponse = http.submitFormWithBinaryData(
+                url = "$base/matches/$matchId/recognize_batter",
+                formData = formData {
+                    append("file", byteArray, Headers.build {
+                        append(HttpHeaders.ContentType, "image/jpeg")
+                        append(HttpHeaders.ContentDisposition, "filename=\"batter.jpg\"")
+                    })
+                }
+            )
+            response.bodyAsText()
         } catch (e: Exception) {
             """{"error":"${e.message}"}"""
         }

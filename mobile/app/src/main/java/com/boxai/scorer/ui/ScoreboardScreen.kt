@@ -38,6 +38,7 @@ fun ScoreboardScreen(
     pendingSuggestion: AiSuggestion?,
     ballHistory: List<BallEvent>,
     isConnected: Boolean,
+    isSpectator: Boolean = false,
     onAddRuns: (Int) -> Unit,
     onWicket: () -> Unit,
     onExtra: (String) -> Unit,
@@ -45,6 +46,7 @@ fun ScoreboardScreen(
     onRejectAi: () -> Unit,
     onFourClicked: () -> Unit,
     onSixClicked: () -> Unit,
+    onFaceDetected: (android.graphics.Bitmap) -> Unit = {},
     onEndInnings: () -> Unit = {}
 ) {
     Box(
@@ -58,8 +60,32 @@ fun ScoreboardScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
-            HeaderBar(isConnected = isConnected, inning = matchState.inning)
+            HeaderBar(isConnected = isConnected, inning = matchState.inning, matchId = matchState.matchId)
             Spacer(modifier = Modifier.height(16.dp))
+            
+            if (!isSpectator) {
+                // Visible camera preview for aiming at batters
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color.Black)
+                ) {
+                    com.boxai.scorer.camera.CameraPreview(
+                        onFaceDetected = onFaceDetected,
+                        modifier = Modifier.fillMaxSize(),
+                        active = true
+                    )
+                    Text(
+                        "Live AI Camera",
+                        color = Color.White.copy(alpha = 0.7f),
+                        fontSize = 10.sp,
+                        modifier = Modifier.padding(8.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
 
             MainScoreCard(matchState = matchState)
             Spacer(modifier = Modifier.height(16.dp))
@@ -119,7 +145,7 @@ fun ScoreboardScreen(
 }
 
 @Composable
-fun HeaderBar(isConnected: Boolean, inning: Int = 1) {
+fun HeaderBar(isConnected: Boolean, inning: Int = 1, matchId: Int = 0) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -138,19 +164,39 @@ fun HeaderBar(isConnected: Boolean, inning: Int = 1) {
                 fontSize = 12.sp
             )
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(if (isConnected) AccentGreen else AccentRed)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                if (isConnected) "Live" else "Offline",
-                color = if (isConnected) AccentGreen else AccentRed,
-                fontSize = 13.sp
-            )
+        Column(horizontalAlignment = Alignment.End) {
+            // Match ID badge — prominently shown so other devices can join
+            if (matchId > 0) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(AccentOrange.copy(alpha = 0.15f))
+                        .border(1.dp, AccentOrange, RoundedCornerShape(8.dp))
+                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                ) {
+                    Text(
+                        "Match #$matchId",
+                        color = AccentOrange,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(if (isConnected) AccentGreen else AccentRed)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    if (isConnected) "Live" else "Offline",
+                    color = if (isConnected) AccentGreen else AccentRed,
+                    fontSize = 13.sp
+                )
+            }
         }
     }
 }
@@ -224,7 +270,7 @@ fun StatsRow(matchState: MatchState) {
         }
         StatChip(
             label = "Balls Left",
-            value = "${(matchState.battingTeam?.players?.size ?: 6) * 6 - (matchState.overs * 6 + matchState.balls)}",
+            value = "${matchState.ballsRemaining}",
             modifier = Modifier.weight(1f)
         )
     }

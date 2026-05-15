@@ -20,14 +20,17 @@ data class MatchSetup(
     val teamA: Team = Team(1, ""),
     val teamB: Team = Team(2, ""),
     val totalOvers: Int = 6,
-    val cameraRole: CameraRole = CameraRole.PHONE_1,
-    val serverIp: String = "192.168.1.100",
-    val matchId: Int = 1
+    val cameraRole: CameraRole = CameraRole.DEVICE_1,
+    val serverIp: String = "192.168.0.125",
+    val matchId: Int = 1,
+    val tossWinnerTeamId: Int = 1, // 1 for Team A, 2 for Team B
+    val tossDecision: String = "BAT" // "BAT" or "BOWL"
 )
 
 enum class CameraRole(val label: String) {
-    PHONE_1("Phone 1 – Behind Keeper"),
-    PHONE_2("Phone 2 – Side Angle")
+    DEVICE_1("Device 1 – Behind Keeper"),
+    DEVICE_2("Device 2 – Side Angle"),
+    SPECTATOR("Device 3 – Spectator / Umpire")
 }
 
 // ── Live Match State ───────────────────────────────────────────────────────────
@@ -42,14 +45,18 @@ data class MatchState(
     val balls: Int = 0,
     // Completed overs count
     val overs: Int = 0,
-    // Total balls delivered (including extras that don't count as legal)
+    // Legal deliveries only (extras excluded)
+    val legalBallsDelivered: Int = 0,
+    // Total deliveries including extras
     val totalBallsDelivered: Int = 0,
     val target: Int? = null,
     val striker: Player? = null,
     val nonStriker: Player? = null,
     val currentBowler: Player? = null,
     val isMatchComplete: Boolean = false,
-    val inning: Int = 1  // 1 = first innings, 2 = second innings
+    val inning: Int = 1,  // 1 = first innings, 2 = second innings
+    // Configured total overs for this match
+    val maxOvers: Int = 6
 ) {
     val runRate: Float
         get() {
@@ -57,12 +64,15 @@ data class MatchState(
             return if (totalOversFloat == 0f) 0f else totalRuns / totalOversFloat
         }
 
+    val ballsRemaining: Int
+        get() = (maxOvers * 6) - legalBallsDelivered
+
     val requiredRunRate: Float?
         get() {
             val t = target ?: return null
             val needed = t - totalRuns
-            val remainingBalls = (6 * 6) - (overs * 6 + balls) // assumes 6-over match
-            return if (remainingBalls <= 0) null else (needed * 6f) / remainingBalls
+            val remaining = ballsRemaining
+            return if (remaining <= 0) null else (needed * 6f) / remaining
         }
 }
 

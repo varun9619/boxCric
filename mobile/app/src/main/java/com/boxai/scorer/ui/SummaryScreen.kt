@@ -1,12 +1,16 @@
 package com.boxai.scorer.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -23,8 +27,10 @@ import kotlin.math.roundToInt
 @Composable
 fun SummaryScreen(
     summary: MatchSummary,
-    onNewMatch: () -> Unit
+    onRematch: (tossWinnerTeamId: Int, tossDecision: String) -> Unit,
+    onChangeTeams: () -> Unit
 ) {
+    var showTossDialog by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -122,19 +128,140 @@ fun SummaryScreen(
                 }
             }
 
-            // ── New Match ─────────────────────────────────────────────────────
-            Button(
-                onClick = onNewMatch,
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = AccentGreen)
+            // ── Action Buttons ────────────────────────────────────────────────
+            // "Same Teams" quick-restart card
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color(0xFF1B2B1B))
+                    .border(1.dp, AccentGreen, RoundedCornerShape(16.dp))
+                    .padding(16.dp)
             ) {
-                Text("+ New Match", color = Color.Black, fontWeight = FontWeight.Black, fontSize = 18.sp)
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        "Play again with same teams?",
+                        color = TextPrimary,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp
+                    )
+                    Text(
+                        "${summary.teamA.name}  vs  ${summary.teamB.name}  •  ${summary.teamAOvers.substringBefore(".").toIntOrNull() ?: "?"} overs",
+                        color = TextSecondary,
+                        fontSize = 12.sp
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = { showTossDialog = true },
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentGreen)
+                    ) {
+                        Text("▶  Yes, Same Teams & Overs!", color = Color.Black, fontWeight = FontWeight.Black, fontSize = 15.sp)
+                    }
+                }
+            }
+
+            OutlinedButton(
+                onClick = onChangeTeams,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, TextSecondary)
+            ) {
+                Text("⚙️  Change Teams / Setup", color = TextSecondary, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
             }
 
             Spacer(modifier = Modifier.height(16.dp))
         }
     }
+
+    // ── Toss Dialog Overlay ─────────────────────────────────────────────
+    if (showTossDialog) {
+        TossDialog(
+            teamAName = summary.teamA.name,
+            teamBName = summary.teamB.name,
+            onConfirm = { winnerId, decision ->
+                showTossDialog = false
+                onRematch(winnerId, decision)
+            },
+            onDismiss = { showTossDialog = false }
+        )
+    }
+}
+
+@Composable
+fun TossDialog(
+    teamAName: String,
+    teamBName: String,
+    onConfirm: (tossWinnerTeamId: Int, tossDecision: String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var tossWinner by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(1) }
+    var tossDecision by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("BAT") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = CardBg,
+        title = {
+            Text("🪙 New Toss", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        },
+        text = {
+            Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)) {
+                Text("Who won the toss?", color = TextPrimary, fontSize = 13.sp)
+                Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(
+                            selected = tossWinner == 1,
+                            onClick = { tossWinner = 1 },
+                            colors = RadioButtonDefaults.colors(selectedColor = AccentGreen, unselectedColor = TextSecondary)
+                        )
+                        Text(teamAName, color = TextPrimary, fontSize = 14.sp)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(
+                            selected = tossWinner == 2,
+                            onClick = { tossWinner = 2 },
+                            colors = RadioButtonDefaults.colors(selectedColor = AccentGreen, unselectedColor = TextSecondary)
+                        )
+                        Text(teamBName, color = TextPrimary, fontSize = 14.sp)
+                    }
+                }
+                Divider(color = TextSecondary.copy(alpha = 0.15f))
+                Text("Decision", color = TextPrimary, fontSize = 13.sp)
+                Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(
+                            selected = tossDecision == "BAT",
+                            onClick = { tossDecision = "BAT" },
+                            colors = RadioButtonDefaults.colors(selectedColor = AccentGreen, unselectedColor = TextSecondary)
+                        )
+                        Text("Bat", color = TextPrimary, fontSize = 14.sp)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(
+                            selected = tossDecision == "BOWL",
+                            onClick = { tossDecision = "BOWL" },
+                            colors = RadioButtonDefaults.colors(selectedColor = AccentGreen, unselectedColor = TextSecondary)
+                        )
+                        Text("Bowl", color = TextPrimary, fontSize = 14.sp)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirm(tossWinner, tossDecision) },
+                colors = ButtonDefaults.buttonColors(containerColor = AccentGreen)
+            ) {
+                Text("▶  Start Match!", color = Color.Black, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = TextSecondary)
+            }
+        }
+    )
 }
 
 // ── Innings Break ─────────────────────────────────────────────────────────────

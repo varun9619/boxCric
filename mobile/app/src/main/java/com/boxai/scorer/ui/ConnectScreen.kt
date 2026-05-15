@@ -51,7 +51,7 @@ fun ConnectScreen(
                 value = serverIp,
                 onValueChange = onIpChange,
                 label = { Text("Server IP", color = TextSecondary) },
-                placeholder = { Text("e.g. 192.168.1.100", color = TextSecondary) },
+                placeholder = { Text("e.g. 192.168.0.125", color = TextSecondary) },
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = AccentGreen,
                     unfocusedBorderColor = TextSecondary,
