@@ -215,16 +215,27 @@ async def create_event(match_id: int, event: schemas.EventCreate, db: Session = 
     await manager.broadcast_match_state(match_id, {
         "type": "state_update",
         "last_event": {
-            "type": event.event_type,
-            "runs": event.runs,
-            "camera_id": event.camera_id,
+            "id": db_event.id,
+            "type": db_event.event_type,
+            "runs": db_event.runs,
+            "camera_id": db_event.camera_id,
+            "over": db_event.over_number,
+            "ball": db_event.ball_number,
+            "description": f"{db_event.runs} run(s)" if db_event.event_type == "boundary" else db_event.event_type.capitalize()
         },
         "current_score": db_state.score if db_state else 0,
         "current_wickets": db_state.wickets if db_state else 0,
-        "current_overs": round(db_state.overs, 2) if db_state else 0.0,
+        "current_overs": legal_ball_count // 6,
+        "current_balls": legal_ball_count % 6,
+        "inning": db_state.inning if db_state else 1,
+        "target": db_state.target if db_state else None
     })
 
     return db_event
+
+@app.get("/matches/{match_id}/events", response_model=list[schemas.EventResponse])
+def get_match_events(match_id: int, db: Session = Depends(get_db)):
+    return db.query(models.BallEvent).filter(models.BallEvent.match_id == match_id).all()
 
 
 # ── Summary ───────────────────────────────────────────────────────────────────

@@ -133,6 +133,19 @@
 
 ---
 
+## Phase 4.5 — Bug Resolution & Sync Polish
+> Goal: Fix multi-device discrepancies and ensure full state (overs, history, run-rate) is consistent across all joined devices.
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 4.5.1 | Sync `overs.balls` accurately (not just decimal) | 🟠 In Progress | Need to broadcast 0-5 ball count |
+| 4.5.2 | Sync `ballHistory` across devices | 🟠 In Progress | Secondary devices currently have empty history |
+| 4.5.3 | Sync `target` and `inning` for joining devices | 🟠 In Progress | Devices joining in 2nd innings need context |
+| 4.5.4 | Fetch full history on Join | 🟠 In Progress | Joining devices should request past balls |
+
+
+---
+
 ## Phase 5 — Automatic Run Inference (Crease Tracking)
 > Goal: Detect crease crossings using MediaPipe Pose + ByteTrack.
 

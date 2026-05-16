@@ -132,6 +132,14 @@ class ApiClient(private val ip: String, private val port: Int = 8000) {
         }
     }
 
+    suspend fun getMatchEvents(matchId: Int): String {
+        return try {
+            http.get("$base/matches/$matchId/events").bodyAsText()
+        } catch (e: Exception) {
+            "[]"
+        }
+    }
+
     // ── Summary ───────────────────────────────────────────────────────────────
 
     /** Fetch end-of-match summary. */
